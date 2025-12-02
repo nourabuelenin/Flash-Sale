@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Product;
 use App\Models\Hold;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Exception;
 
@@ -28,22 +29,23 @@ class InventoryService
 
             // 3. The Concurrency Check
             if ($product->intStock < $qty) {
-                throw new Exception("Insufficient stock", 409); // 409 Conflict
+                throw new Exception("Insufficient stock", 409);
             }
 
-            // 4. Decrement Stock (Atomic update within the lock)
+            // 4. Decrement Stock
             $product->decrement('intStock', $qty);
 
-            // 5. Create the Hold Record
+            // 5. Invalidate product cache
+            $product->invalidateCache();
+
+            // 6. Create the Hold Record
             return Hold::create([
                 'intProductID' => $product->id,
                 'intQuantity' => $qty,
-                'strHoldToken' => Str::random(32), // Secure token for the frontend
-                'tmExpire' => now()->addMinutes(2), // Hold for 2 mins
+                'strHoldToken' => Str::random(32),
+                'tmExpire' => now()->addMinutes(2),
             ]);
         });
-        // Transaction automatically commits here if no exception is thrown.
-        // If Exception is thrown, it automatically rolls back.
     }
 
     /**
@@ -52,26 +54,52 @@ class InventoryService
      */
     public function releaseExpiredHolds(): int
     {
-        // Find holds that are expired AND not yet converted/released
         $expiredHolds = Hold::where('tmExpire', '<', now())
             ->whereNull('tmRelease')
             ->whereNull('tmConvertedToOrder')
-            ->lockForUpdate() // Lock them so we don't process them twice in parallel
+            ->lockForUpdate()
             ->get();
 
         $count = 0;
 
         foreach ($expiredHolds as $hold) {
             DB::transaction(function () use ($hold) {
-                // Return stock to product
                 $hold->product()->increment('intStock', $hold->intQuantity);
-                
-                // Mark as released
+                $hold->product->invalidateCache();
                 $hold->update(['tmRelease' => now()]);
             });
             $count++;
         }
 
         return $count;
+    }
+
+    /**
+     * Release a specific hold immediately (e.g., when payment fails).
+     * 
+     * @param string $holdToken The hold token to release
+     * @throws Exception If hold not found or already processed
+     */
+    public function releaseHold(string $holdToken): void
+    {
+        DB::transaction(function () use ($holdToken) {
+            $hold = Hold::where('strHoldToken', $holdToken)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$hold) {
+                throw new Exception("Hold not found", 404);
+            }
+
+            if ($hold->tmRelease || $hold->tmConvertedToOrder) {
+                throw new Exception("Hold already processed", 409);
+            }
+
+            $hold->product()->increment('intStock', $hold->intQuantity);
+            
+            $hold->product->invalidateCache();
+            
+            $hold->update(['tmRelease' => now()]);
+        });
     }
 }

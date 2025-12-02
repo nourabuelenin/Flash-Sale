@@ -20,13 +20,12 @@ class HoldController extends Controller
     {
         // 1. Validation
         $request->validate([
-            'intProductID' => 'required|integer',
-            'intQuantity' => 'required|integer|min:1',
+            'product_id' => 'required|integer',
+            'qty' => 'required|integer|min:1',
         ]);
 
         try {
             // 2. Delegate "Heavy Lifting" to Service
-            // This handles the locking and race conditions internally.
             $hold = $this->inventoryService->createHold(
                 $request->product_id, 
                 $request->qty
@@ -40,8 +39,6 @@ class HoldController extends Controller
             ], 201);
 
         } catch (Exception $e) {
-            // Handle "Insufficient Stock" or "Product Not Found"
-            // Using 409 Conflict is standard for resource contention
             return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 400);
         }
     }

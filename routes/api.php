@@ -6,7 +6,16 @@ use App\Http\Controllers\OrderController;
 use App\Http\Controllers\WebhookController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/products/{id}', [ProductController::class, 'view']);
-Route::post('/holds', [HoldController::class, 'store']);
-Route::post('/orders', [OrderController::class, 'store']);
-Route::post('/payments/webhook', [WebhookController::class, 'handle']);
+Route::middleware(['throttle:api'])->group(function () {
+    Route::get('/products/{id}', [ProductController::class, 'view'])
+        ->middleware('throttle:100,1');
+    
+    Route::post('/holds', [HoldController::class, 'store'])
+        ->middleware('throttle:20,1');
+    
+    Route::post('/orders', [OrderController::class, 'store'])
+        ->middleware('throttle:20,1');
+});
+
+Route::post('/payments/webhook', [WebhookController::class, 'handle'])
+    ->middleware('throttle:1000,1');

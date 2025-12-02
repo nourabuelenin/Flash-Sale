@@ -8,10 +8,11 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
+     * Creates logs table for IdempotencyLog model to track webhook idempotency.
      */
     public function up(): void
     {
-        Schema::create('logs', function (Blueprint $table) {
+        Schema::create('idempotency_logs', function (Blueprint $table) {
             $table->id();
             $table->string('strIdempotencyKey')->unique();
             $table->string('strRequest');
@@ -26,6 +27,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('logs');
+        Schema::dropIfExists('idempotency_logs');
     }
 };

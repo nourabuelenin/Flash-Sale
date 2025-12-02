@@ -14,7 +14,7 @@ class OrderController extends Controller
     {
         $request->validate([
             'hold_id' => 'required|integer',
-            'token' => 'required|string', // Security check
+            'token' => 'required|string',
         ]);
 
         // 1. Find the Hold
@@ -31,10 +31,7 @@ class OrderController extends Controller
 
         // 3. Create Order Atomically
         $order = DB::transaction(function () use ($hold) {
-            // Mark hold as used
             $hold->update(['tmConvertedToOrder' => now()]);
-
-            // Create Order in "pre-payment" state
             return Order::create([
                 'intHoldID' => $hold->id,
                 'strStatus' => 'pending',

@@ -14,10 +14,6 @@ class ProductController extends Controller
             return Product::findOrFail($id);
         });
 
-        // If you need 100% real-time stock, refresh just the stock field from DB:
-        // $product->refresh(); 
-        // Or trust the cache if you invalidate it on every Hold creation.
-
         return response()->json([
             'id' => $product->id,
             'name' => $product->strName,
